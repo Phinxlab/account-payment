@@ -493,11 +493,11 @@ class AccountPaymentGroup(models.Model):
                 raise ValidationError(_('Payment group for partner %s but payment lines are of partner %s') % (
                     rec.partner_id.name, to_pay_partners.name))
 
-    @api.constrains('partner_id', 'company_id')
-    def _check_no_transfer(self):
-        transfers = self.filtered(lambda x: x.company_id.partner_id == x.partner_id)
-        if transfers:
-            raise ValidationError(_("You can't make a payment/receipt to your same company, create an internal transfer instead"))
+    # @api.constrains('partner_id', 'company_id')
+    # def _check_no_transfer(self):
+    #     transfers = self.filtered(lambda x: x.company_id.partner_id == x.partner_id)
+    #     if transfers:
+    #         raise ValidationError(_("You can't make a payment/receipt to your same company, create an internal transfer instead"))
 
     # from old account_payment_document_number
 
