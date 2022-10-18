@@ -412,6 +412,15 @@ class AccountPaymentGroup(models.Model):
         if recs:
             raise ValidationError(_('You can not delete posted payment groups. Payment group ids: %s') % recs.ids)
 
+    def unlink(self):
+        """ Hacemos unlink de esta manera y no con el ondelete cascade porque con este ultimo se hace eliminacion
+        por sql y no se llama el metodo unlin de odoo account.payment que se encarga de propagar la eliminacion al
+        account.move"""
+        payments = self.mapped('payment_ids')
+        res = super().unlink()
+        payments.unlink()
+        return res
+
     def confirm(self):
         for rec in self:
             accounts = rec.to_pay_move_line_ids.mapped('account_id')
@@ -443,7 +452,10 @@ class AccountPaymentGroup(models.Model):
                         rec.receiptbook_id.with_context(
                             ir_sequence_date=rec.payment_date
                         ).sequence_id.next_by_id())
-            rec.payment_ids.name = rec.name
+            # por ahora solo lo usamos en _get_last_sequence_domain para saber si viene de una transferencia (sin
+            # documen type) o es de un grupo de pagos. Pero mas alla de eso no tiene un gran uso, viene un poco legacy
+            # y ya está configurado en los receibooks
+            rec.payment_ids.l10n_latam_document_type_id = rec.document_type_id.id
 
             if not rec.payment_ids:
                 raise ValidationError(_(
@@ -460,6 +472,8 @@ class AccountPaymentGroup(models.Model):
             # no volvemos a postear lo que estaba posteado
             if not created_automatically:
                 rec.payment_ids.filtered(lambda x: x.state == 'draft').action_post()
+            # escribimos despues del post para que odoo no renumere el payment
+            rec.payment_ids.name = rec.name
 
             if not rec.receiptbook_id and not rec.name:
                 rec.name = any(
@@ -499,6 +513,10 @@ class AccountPaymentGroup(models.Model):
 
     @api.constrains('partner_id', 'company_id')
     def _check_no_transfer(self):
+        # TODO en realidad si habría casos de uso donde esto es necesario se podría permitir sin problemas,
+        # de hecho odoo hizo un cambio para permitirlo acá
+        # https://github.com/odoo/odoo/commit/362d8cbf7724431672b8b73fb5f4682d4d2c3f66
+        # igual por el momento parece ser más apropiado recomendar transferencia interna
         transfers = self.filtered(lambda x: x.company_id.partner_id == x.partner_id)
         if transfers:
             raise ValidationError(_("You can't make a payment/receipt to your same company, create an internal transfer instead"))
@@ -555,7 +573,7 @@ class AccountPaymentGroup(models.Model):
 
     @api.depends('company_id', 'partner_type')
     def _compute_receiptbook(self):
-        for rec in self.filtered(lambda x: not x.receiptbook_id):
+        for rec in self.filtered(lambda x: not x.receiptbook_id or x.receiptbook_id.company_id != x.company_id):
             partner_type = self.partner_type or self._context.get(
                 'partner_type', self._context.get('default_partner_type', False))
             receiptbook = self.env[
