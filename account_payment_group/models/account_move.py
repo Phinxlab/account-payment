@@ -64,7 +64,7 @@ class AccountMove(models.Model):
             raise UserError(_('Nothing to be paid on selected entries'))
         to_pay_partners = self.mapped('commercial_partner_id')
         if len(to_pay_partners) > 1:
-            raise UserError(_('Selected recrods must be of the same partner'))
+            raise UserError(_('Selected records must be of the same partner'))
 
         return {
             'name': _('Register Payment'),
@@ -82,6 +82,11 @@ class AccountMove(models.Model):
                 'default_company_id': self.company_id.id,
             },
         }
+
+    def action_register_payment(self):
+        ''' This method is extended to work like action_register_payment_group() and not like the native odoo method,
+        the register payment button will act like the "Registrar Pago" server action '''
+        return self.action_register_payment_group()
 
     def action_post(self):
         res = super(AccountMove, self).action_post()
@@ -104,7 +109,7 @@ class AccountMove(models.Model):
                     partner_type = 'customer'
 
                 pay_context = {
-                    'to_pay_move_line_ids': (rec.open_move_line_ids.ids),
+                    'default_to_pay_move_line_ids': (rec.open_move_line_ids.ids),
                     'default_company_id': rec.company_id.id,
                     'default_partner_type': partner_type,
                 }
@@ -203,3 +208,22 @@ class AccountMove(models.Model):
         if self._context.get('without_payment_group'):
             args += [('payment_group_id', '=', False)]
         return super()._search(args, offset=offset, limit=limit, order=order, count=count, access_rights_uid=access_rights_uid)
+
+    @api.model
+    def _deduce_sequence_number_reset(self, name):
+        """ Cuando tenemos un move asociado al payment group queremos que el move tenga el mismo nombre que el del payment
+        group. Esto para que en cualquier reporte aparezca este nombre de referencia.
+
+        En verion 15 hay una constraint nueva _constrains_date_sequence que trae un problema. cuando vamos a validar un
+        account.move revisa el nombre/secuencia que le fue asignado con un regex para encontrar algo parecido a un
+        año y lo compara con el año de la fecha del move y si son diferentes años no permite continuar. Ejemplo:
+        Tenemos un pago de proveedor que se llama OP - 2022 - 00012345 y lo validamos y generamos los account.move en el
+        año 2023. El resultado es que nos salta la excpeción indicando que la secuencia que queremos asignar al move no
+        es valida y debe corresponder al año.
+
+        Para fines del account.move no queremos que esto aplique. No importa que nombre utilice el payment.group queremos
+        que al validarse se traslade el nombre a los move generados. La modificacion de este metodo logra evitar esa
+        comparacion de fechas"""
+        if self.payment_group_id:
+            return 'never'
+        return super()._deduce_sequence_number_reset(name)
