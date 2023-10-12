@@ -110,15 +110,15 @@
                         <field name="communication" attrs="{'invisible': [('state', '!=', 'draft'), ('communication', '=', False)]}"/>
                     </group>
                     <group name="group3">
-                        <field name="selected_debt" options="{'currency_field': 'currency_id'}" states="draft,confirmed"/>
-                        <field name="matched_amount" options="{'currency_field': 'currency_id'}" states="posted"/>
-                        <field name="unmatched_amount" options="{'currency_field': 'currency_id'}" states="posted"/>
-                        <field name="unreconciled_amount" options="{'currency_field': 'currency_id'}" attrs="{'invisible': ['|', ('payment_subtype', '!=', 'double_validation'), ('state', 'not in', ['draft', 'confirmed'])]}"/>
-                        <field name="to_pay_amount" options="{'currency_field': 'currency_id'}" attrs="{'invisible': ['|', ('payment_subtype', '!=', 'double_validation'), ('state', 'not in', ['draft', 'confirmed'])]}"/>
+                        <field name="selected_debt" options="{'currency_field': 'currency_id'}" states="draft,confirmed" invisible="1"/>
+                        <!-- <field name="matched_amount" invisible="1" options="{'currency_field': 'currency_id'}" states="posted"/> -->
+                        <field name="unmatched_amount" invisible="1"  options="{'currency_field': 'currency_id'}" states="posted"/>
+                        <field name="unreconciled_amount" invisible="1" options="{'currency_field': 'currency_id'}" attrs="{'invisible': ['|', ('payment_subtype', '!=', 'double_validation'), ('state', 'not in', ['draft', 'confirmed'])]}"/>
+                        <field name="to_pay_amount" invisible="1"  options="{'currency_field': 'currency_id'}" attrs="{'invisible': ['|', ('payment_subtype', '!=', 'double_validation'), ('state', 'not in', ['draft', 'confirmed'])]}"/>
                     </group>
                     <group name="group4">
-                        <field name="payments_amount" string="Payments Amount" options="{'currency_field': 'currency_id'}"/>
-                        <field name="payment_difference" options="{'currency_field': 'currency_id'}" states="draft,confirmed"/>
+                        <field name="payments_amount" invisible="1" string="Payments Amount" options="{'currency_field': 'currency_id'}"/>
+                        <field name="payment_difference" invisible="1" options="{'currency_field': 'currency_id'}" states="draft,confirmed"/>
                     </group>
                 </group>
                 <notebook>

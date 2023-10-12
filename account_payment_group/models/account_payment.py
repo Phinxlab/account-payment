@@ -32,7 +32,7 @@ class AccountPayment(models.Model):
     )
     exchange_rate = fields.Float(
         string='Exchange Rate',
-        compute='_compute_exchange_rate',
+        # compute='_compute_exchange_rate',
         # readonly=False,
         # inverse='_inverse_exchange_rate',
         digits=(16, 4),
@@ -110,14 +110,20 @@ class AccountPayment(models.Model):
             self.payment_type = 'inbound' if self.payment_group_id.partner_type  == 'customer' else 'outbound'
             self.amount = self.payment_group_id.payment_difference
 
-    @api.depends('amount', 'other_currency', 'amount_company_currency')
-    def _compute_exchange_rate(self):
-        for rec in self:
-            if rec.other_currency:
-                rec.exchange_rate = rec.amount and (
-                    rec.amount_company_currency / rec.amount) or 0.0
-            else:
-                rec.exchange_rate = False
+    # @api.depends('amount', 'other_currency', 'amount_company_currency')
+    # def _compute_exchange_rate(self):
+    #     for rec in self:
+    #         if rec.other_currency:
+    #             rec.exchange_rate = rec.amount and (
+    #                 rec.amount_company_currency / rec.amount) or 0.0
+    #         else:
+    #             rec.exchange_rate = False
+
+    # @api.onchange('exchange_rate')
+    # def _inverse_exchange_rate(self):
+    #     for rec in self:
+    #         if rec.other_currency:
+    #             rec.amount_company_currency = rec.amount * rec.exchange_rate
 
     # this onchange is necesary because odoo, sometimes, re-compute
     # and overwrites amount_company_currency. That happends due to an issue
@@ -146,7 +152,7 @@ class AccountPayment(models.Model):
             if not rec.other_currency:
                 amount_company_currency = rec.amount
             elif rec.force_amount_company_currency:
-                amount_company_currency = rec.force_amount_company_currency
+                amount_company_currency = rec.amount * rec.exchange_rate
             else:
                 amount_company_currency = rec.currency_id._convert(
                     rec.amount, rec.company_id.currency_id,

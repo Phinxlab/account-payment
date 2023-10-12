@@ -9,8 +9,75 @@
         <field name="payment_difference" position="after">
             <field name="lines_same_currency_id" attrs="{'invisible': [('lines_same_currency_id', '=', False)]}"/>
             <field name="lines_rate"
-                   attrs="{'readonly':[('state', 'not in', ['draft','confirmed'])],'invisible': [('lines_same_currency_id', '=', False)],'required': [('lines_same_currency_id', '!=', False)]}"/>
+                   attrs="{'invisible':[('state', 'not in', ['posted']),('lines_same_currency_id', '=', False)]}"/>
         </field>
+        <field name="unreconciled_amount" position="after">        
+            <!-- Total Seleccionado -->
+                <!-- Moneda Extranjera -->
+            <field name="selected_debt_currency" 
+                string="Total Seleccionado" 
+                options="{'currency_field': 'lines_same_currency_id', 'digits': 'Product Price', 'field_digits_force': True}" 
+                attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])]}"/>
+                <!-- Moneda Compañia -->
+            <field name="selected_debt" 
+                string="Total Seleccionado" 
+                options="{'currency_field': 'currency_id'}" 
+                attrs="{'invisible': ['|',('lines_same_currency_id','!=', False),('state','not in', ['draft','confirmed'])]}"/>
+
+            <!-- Importe a Pagar -->
+                <!-- Moneda Extranjera -->
+            <label for="to_pay_amount_currency" 
+                string="Total a Pagar" 
+                attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])]}"/>
+            <div class="o_row no-gutters d-flex" 
+                attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])]}">
+                <field 
+                    name="to_pay_amount_currency" 
+                    options="{'currency_field': 'lines_same_currency_id', 'digits': 'Product Price', 'field_digits_force': True}" 
+                    attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])]}"/>
+                <label for="lines_rate" 
+                    string="T.C." 
+                    class="oe_inline"
+                    attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])]}"
+                />
+                <field name="lines_rate" 
+                    attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])], 'readonly': [('state', '!=', 'draft')]}"/>
+            </div> 
+                <!-- Moneda Compañia -->
+            <field 
+                name="to_pay_amount" 
+                options="{'currency_field': 'currency_id'}" 
+                attrs="{'invisible': ['|',('lines_same_currency_id','!=', False),('state','not in', ['draft','confirmed'])]}"/>
+
+
+            <!-- Nuevo Saldo-->
+            <field name="payment_difference_currency"
+                options="{'currency_field': 'lines_same_currency_id', 'digits': 'Product Price', 'field_digits_force': True}"
+                invisible="1"
+                attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])]}"/>
+            <field name="payment_difference"
+                options="{'currency_field': 'currency_id'}" 
+                attrs="{'invisible': ['|',('lines_same_currency_id','!=', False),('state','not in', ['draft','confirmed'])]}"/>                
+            
+            <field name="amount_balance_currency" string="Nuevo Saldo" 
+                options="{'currency_field': 'lines_same_currency_id', 'digits': 'Product Price', 'field_digits_force': True}" 
+                readonly="1"
+                force_save="1"
+                attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])]}"/>
+            <field name="amount_balance" string="Nuevo Saldo" 
+                options="{'currency_field': 'currency_id'}" 
+                attrs="{'invisible': ['|',('lines_same_currency_id','!=', False),('state','not in', ['draft','confirmed'])]}"/>                
+
+            <field name="matched_amount_currency" 
+                string="Monto Conciliado"
+                readonly="1"
+                force_save="1"                
+                options="{'currency_field': 'lines_same_currency_id', 'digits': 'Product Price', 'field_digits_force': True}" 
+                attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['posted'])]}"/>
+            <field name="matched_amount" 
+                options="{'currency_field': 'currency_id'}" 
+                attrs="{'invisible': ['|',('lines_same_currency_id','!=', False),('state','not in', ['posted'])]}"/>
+        </field>                               
     </field>
 </record>
 

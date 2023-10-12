@@ -21,8 +21,10 @@ class AccountTax(models.Model):
                     ], limit=1)
                 if payment_withholding:
                     vals2update = {'currency_id': payment_group.lines_same_currency_id}
-                    if payment_group.lines_rate:
+                    if payment_group.lines_rate > 0:
                         vals2update['amount'] = payment_withholding.amount / payment_group.lines_rate
+                        vals2update['exchange_rate'] = payment_group.lines_rate
+                        vals2update['amount_company_currency'] = payment_withholding.amount
                     else:
                         vals2update['amount'] = payment_group.company_id.currency_id._convert(
                             payment_withholding.amount,

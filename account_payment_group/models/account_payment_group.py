@@ -403,7 +403,9 @@ class AccountPaymentGroup(models.Model):
         return True
 
     def action_draft(self):
+
         self.mapped('payment_ids').action_draft()
+        self.payment_ids.unlink()
         return self.write({'state': 'draft'})
 
     @api.ondelete(at_uninstall=False)
@@ -462,8 +464,13 @@ class AccountPaymentGroup(models.Model):
                     'You can not confirm a payment group without payment lines!'))
             # si todos los pagos hijos estan posteados es probable que venga de un pago creado en otro lugar
             # (expenses por ejemplo), en ese caso salteamos la dobule validation
-            if (rec.payment_subtype == 'double_validation' and rec.payment_difference and not created_automatically):
-                raise ValidationError(_('To Pay Amount and Payment Amount must be equal!'))
+            
+            if rec.lines_same_currency_id:
+                if (rec.payment_subtype == 'double_validation' and rec.payment_difference_currency and not created_automatically):
+                    raise ValidationError(_('To Pay Amount and Payment Amount must be equal!'))
+            else:
+                if (rec.payment_subtype == 'double_validation' and rec.payment_difference and not created_automatically):
+                    raise ValidationError(_('To Pay Amount and Payment Amount must be equal!'))
 
             # if the partner of the payment is different of ht payment group we change it.
             rec.payment_ids.filtered(lambda p: p.partner_id != rec.partner_id.commercial_partner_id).write(

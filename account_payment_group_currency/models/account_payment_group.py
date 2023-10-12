@@ -41,3 +41,118 @@ class AccountPaymentGroup(models.Model):
             else:
                 rec.lines_same_currency_id = False
 
+    payment_difference_currency = fields.Monetary(
+        compute='_compute_payment_difference_currency',
+        readonly=True,
+        currency_field='lines_same_currency_id',
+    )
+
+    @api.depends('selected_debt_currency','to_pay_amount_currency','payments_amount_currency')
+    def _compute_payment_difference_currency(self):
+        for rec in self:
+            rec.payment_difference_currency = rec.to_pay_amount_currency - rec.payments_amount_currency
+
+    payments_amount_currency = fields.Monetary(
+        compute='_compute_payments_amount_currency',
+        currency_field='lines_same_currency_id',
+        string='Total Pagos',
+        tracking=True,
+    )   
+
+    @api.depends('payment_ids.amount_total_signed')
+    def _compute_payments_amount_currency(self):
+        for rec in self:
+            rec.payments_amount_currency = sum((rec._origin.payment_ids + rec.payment_ids.filtered(lambda x: not x.ids)).mapped(
+                'amount'))
+
+    to_pay_amount_currency = fields.Monetary(
+        compute='_compute_to_pay_amount_currency',
+        inverse='_inverse_to_pay_amount_currency',
+        string='Importe a pagar',
+        readonly=True,
+        states={'draft': [('readonly', False)]},
+        tracking=True,
+    )
+    unreconciled_amount_currency = fields.Monetary(
+        string='Adjustment / Advance Currency',
+        readonly=True,
+        states={'draft': [('readonly', False)]},
+    )    
+
+    @api.depends(
+        'selected_debt_currency', 'unreconciled_amount_currency')
+    def _compute_to_pay_amount_currency(self):
+        for rec in self:
+            rec.to_pay_amount_currency = rec.selected_debt_currency + rec.unreconciled_amount_currency    
+
+    @api.onchange('to_pay_amount_currency')
+    def _inverse_to_pay_amount_currency(self):
+        for rec in self:
+            rec.unreconciled_amount_currency = rec.to_pay_amount_currency - rec.selected_debt_currency
+
+    @api.onchange('payments_amount_currency')
+    def _inverse_payments_amount_currency(self):
+        for rec in self:
+            rec.to_pay_amount = rec.payments_amount_currency * rec.lines_rate
+
+    matched_amount_currency = fields.Monetary(
+        compute='_compute_matched_amounts_currency',
+        currency_field='lines_same_currency_id',
+    )
+    unmatched_amount_currency = fields.Monetary(
+        compute='_compute_matched_amounts_currency',
+        currency_field='lines_same_currency_id',
+    )    
+
+    @api.depends(
+        'state',
+        'payments_amount_currency',
+        )
+    def _compute_matched_amounts_currency(self):
+        for rec in self:
+            rec.matched_amount_currency = 0.0
+            rec.unmatched_amount_currency = 0.0
+            if rec.state != 'posted':
+                continue
+            sign = rec.partner_type == 'supplier' and -1.0 or 1.0
+            rec.matched_amount_currency = sign * sum(
+                rec.matched_move_line_ids.with_context(payment_group_id=rec.id).mapped('payment_group_matched_amount_currency'))
+            rec.unmatched_amount_currency = rec.payments_amount_currency - rec.matched_amount_currency
+
+
+    selected_debt_currency = fields.Monetary(
+        string='Total Seleccionado',
+        currency_field='lines_same_currency_id',        
+        compute='_compute_selected_debt_currency',
+    )    
+
+    @api.depends('to_pay_move_line_ids.amount_residual_currency')
+    def _compute_selected_debt_currency(self):
+        for rec in self:
+            rec.selected_debt_currency = sum(rec.to_pay_move_line_ids._origin.mapped('amount_residual_currency')) * (-1.0 if rec.partner_type == 'supplier' else 1.0)
+
+
+    amount_balance_currency = fields.Monetary(
+        compute='_compute_amount_balance_currency',
+        string='Nuevo Saldo',
+        currency_field='lines_same_currency_id',        
+        readonly=True,
+        tracking=True,
+    )
+
+    amount_balance = fields.Monetary(
+        compute='_compute_amount_balance',
+        string='Nuevo Saldo',
+        readonly=True,
+        tracking=True,
+    )
+
+    @api.depends('selected_debt_currency','to_pay_amount_currency','payments_amount_currency')
+    def _compute_amount_balance_currency(self):
+        for rec in self:
+            rec.amount_balance_currency = rec.selected_debt_currency - rec.to_pay_amount_currency
+
+    @api.depends('selected_debt','to_pay_amount','payments_amount')
+    def _compute_amount_balance(self):
+        for rec in self:
+            rec.amount_balance = rec.selected_debt - rec.to_pay_amount            

@@ -29,6 +29,21 @@ class AccountPaymentGroup(models.Model):
         currency_field='currency_id',
     )
 
+    recompute_withholding_lines = fields.Boolean(
+        "Recomputar lineas de Retenciones",
+        compute="_copmute_recompute_withholding_lines"
+    )
+
+    def _copmute_recompute_withholding_lines(self):
+        for rec in self:
+            recompute_payment = False
+            if rec.state in ['draft','confirmed']:
+                withholding_payment_lines = rec.payment_ids.filtered(lambda x: x.tax_withholding_id)
+                withholding_payment_lines.unlink()
+                rec.compute_withholdings()
+                recompute_payment = True
+            rec.recompute_withholding_lines = recompute_payment
+
     def _compute_matched_amount_untaxed(self):
         """ Lo separamos en otro metodo ya que es un poco mas costoso y no se
         usa en conjunto con matched_amount

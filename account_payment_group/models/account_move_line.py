@@ -42,3 +42,26 @@ class AccountMoveLine(models.Model):
         compute='_compute_payment_group_matched_amount',
         currency_field='company_currency_id',
     )
+
+    @api.depends_context('payment_group_id')
+    def _compute_payment_group_matched_amount_currency(self):
+        """
+        Reciviendo un payment_group_id por contexto, decimos en ese payment
+        group, cuanto se pago para la lína en cuestión.
+        """
+        payment_group_id = self._context.get('payment_group_id')
+        if not payment_group_id:
+            self.payment_group_matched_amount_currency = 0.0
+            return False
+        payments = self.env['account.payment.group'].browse(payment_group_id).payment_ids
+        payment_lines = payments.mapped('line_ids').filtered(lambda x: x.account_internal_type in ['receivable', 'payable'])
+
+        for rec in self:
+            debit_move_amount = sum(payment_lines.mapped('matched_debit_ids').filtered(lambda x: x.debit_move_id == rec).mapped('debit_amount_currency'))
+            credit_move_amount = sum(payment_lines.mapped('matched_credit_ids').filtered(lambda x: x.credit_move_id == rec).mapped('credit_amount_currency'))
+            rec.payment_group_matched_amount_currency = debit_move_amount - credit_move_amount
+
+    payment_group_matched_amount_currency = fields.Monetary(
+        compute='_compute_payment_group_matched_amount_currency',
+        currency_field='currency_id',
+    )
