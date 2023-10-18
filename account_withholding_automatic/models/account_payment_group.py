@@ -120,6 +120,9 @@ class AccountPaymentGroup(models.Model):
             # caso viene in_invoice o out_invoice y en search de tax filtrar
             # por impuestos de venta y compra (y no los nuestros de pagos
             # y cobros)
+            rec.payment_date = fields.Date.today()
+            withholding_lines = rec.payment_ids.filtered(lambda x: x.tax_withholding_id)
+            withholding_lines.unlink()
             self.env['account.tax'].with_context(type=None).search([
                 ('type_tax_use', '=', rec.partner_type),
                 ('company_id', '=', rec.company_id.id),
@@ -129,9 +132,6 @@ class AccountPaymentGroup(models.Model):
         res = super(AccountPaymentGroup, self).confirm()
         for rec in self:
             if rec.company_id.automatic_withholdings:
-                rec.payment_date = fields.Date.today()
-                withholding_lines = rec.payment_ids.filtered(lambda x: x.tax_withholding_id)
-                withholding_lines.unlink()
                 rec.compute_withholdings()
         return res
 
@@ -220,12 +220,12 @@ class AccountPaymentGroup(models.Model):
                     self.withholdable_advanced_amount
         return (withholdable_advanced_amount, withholdable_invoiced_amount)
     
-    def post(self):
-        for rec in self:
-            rec.payment_date = fields.Date.today()
-            withholding_lines = rec.payment_ids.filtered(lambda x: x.tax_withholding_id)
-            if withholding_lines:
-                withholding_lines.unlink()
-                rec.compute_withholdings()
-                rec.env.cr.commit()
-        return super(AccountPaymentGroup, self).post()
+    # def post(self):
+    #     for rec in self:
+    #         rec.payment_date = fields.Date.today()
+    #         withholding_lines = rec.payment_ids.filtered(lambda x: x.tax_withholding_id)
+    #         if withholding_lines:
+    #             withholding_lines.unlink()
+    #             rec.compute_withholdings()
+    #             rec.env.cr.commit()
+    #     return super(AccountPaymentGroup, self).post()
