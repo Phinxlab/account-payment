@@ -34,7 +34,7 @@ class AccountPaymentGroup(models.Model):
             amount_currency_usd = 0
             currency_usd = self.env.ref('base.USD')
             currency_id = rec.lines_same_currency_id or rec.company_id.currency_id
-            amount_currency = rec.matched_amount_currency if self._context.get('payment_acumulate') else rec.to_pay_amount_currency
+            amount_currency = rec.matched_amount_currency if self._context.get('payment_acumulate') else rec._get_mached_amount_untaxed(rec.to_pay_amount_currency)
             amount_currency_usd = currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
             return amount_currency_usd
 
@@ -55,6 +55,23 @@ class AccountPaymentGroup(models.Model):
                 matched_amount_untaxed += \
                     line.payment_group_matched_amount * factor
             rec.matched_amount_untaxed = sign * matched_amount_untaxed
+
+    def _get_mached_amount_untaxed(self, to_pay_amount_currency):
+        amount_untaxed = 0.0
+        amount_tax = 0.0
+        amount = 0.0
+        sign = self.partner_type == 'supplier' and -1.0 or 1.0
+        for line in self.to_pay_move_line_ids:
+            invoice = line.move_id
+            factor = invoice and invoice._get_tax_factor() or 1.0
+            amount_untaxed += \
+                line.price_total * factor
+            amount_tax += \
+                line.price_total
+        amount_untaxed = amount_untaxed
+        amount_tax = amount_tax
+        amount = to_pay_amount_currency * amount_untaxed / amount_tax
+        return amount
 
     @api.depends(
         'to_pay_move_line_ids.amount_residual',
