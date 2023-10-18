@@ -10,7 +10,7 @@ class AccountTax(models.Model):
     _inherit = "account.tax"
 
     def create_payment_withholdings(self, payment_group):
-        super(AccountTax, self).create_payment_withholdings(payment_group)
+        res = super(AccountTax, self).create_payment_withholdings(payment_group)
         if payment_group.lines_same_currency_id and payment_group.lines_same_currency_id.id != payment_group.company_id.currency_id.id:
             for tax in self.filtered(lambda x: x.withholding_type != 'none'):
                 payment_withholding = self.env[
@@ -33,6 +33,6 @@ class AccountTax(models.Model):
                             payment_group.payment_date)
                     vals2update['amount_company_currency'] = payment_withholding.amount
                     payment_withholding.write(vals2update)
-        return True
+        return res
 
 

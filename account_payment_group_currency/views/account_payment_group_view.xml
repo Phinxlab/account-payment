@@ -41,7 +41,7 @@
                     attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])]}"
                 />
                 <field name="lines_rate" 
-                    attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])], 'readonly': [('state', '!=', 'draft')]}"/>
+                    attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])], 'readonly': [('state', 'not in', ['draft','confirmed'])]}"/>
             </div> 
                 <!-- Moneda Compañia -->
             <field 

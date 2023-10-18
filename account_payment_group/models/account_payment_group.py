@@ -409,9 +409,7 @@ class AccountPaymentGroup(models.Model):
         return True
 
     def action_draft(self):
-
         self.mapped('payment_ids').action_draft()
-        self.payment_ids.unlink()
         return self.write({'state': 'draft'})
 
     @api.ondelete(at_uninstall=False)

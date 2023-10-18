@@ -28,21 +28,15 @@ class AccountPaymentGroup(models.Model):
         compute='_compute_matched_amount_untaxed',
         currency_field='currency_id',
     )
-
-    recompute_withholding_lines = fields.Boolean(
-        "Recomputar lineas de Retenciones",
-        compute="_copmute_recompute_withholding_lines"
-    )
-
-    def _copmute_recompute_withholding_lines(self):
+    
+    def get_amount_currency_usd(self):
         for rec in self:
-            recompute_payment = False
-            if rec.state in ['draft','confirmed']:
-                withholding_payment_lines = rec.payment_ids.filtered(lambda x: x.tax_withholding_id)
-                withholding_payment_lines.unlink()
-                rec.compute_withholdings()
-                recompute_payment = True
-            rec.recompute_withholding_lines = recompute_payment
+            amount_currency_usd = 0
+            currency_usd = self.env.ref('base.USD')
+            currency_id = rec.lines_same_currency_id or rec.company_id.currency_id
+            amount_currency = rec.matched_amount_currency if self._context.get('payment_acumulate') else rec.to_pay_amount_currency
+            amount_currency_usd = currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
+            return amount_currency_usd
 
     def _compute_matched_amount_untaxed(self):
         """ Lo separamos en otro metodo ya que es un poco mas costoso y no se
@@ -77,7 +71,14 @@ class AccountPaymentGroup(models.Model):
                 # factor for total_untaxed
                 invoice = line.move_id
                 factor = invoice and invoice._get_tax_factor() or 1.0
-                selected_debt_untaxed += line.amount_residual * factor
+                if self.lines_same_currency_id == self.company_id.currency_id:
+                    selected_debt_untaxed += line.amount_residual * factor
+                else:
+                    selected_debt_untaxed += line.amount_residual_currency * factor * rec.lines_rate
+            
+            if abs(selected_debt_untaxed) > abs(rec.to_pay_amount_currency * rec.lines_rate):
+                selected_debt_untaxed = rec.to_pay_amount_currency * rec.lines_rate * -1
+            
             rec.selected_debt_untaxed = selected_debt_untaxed * (rec.partner_type == 'supplier' and -1.0 or 1.0)
 
     @api.onchange('unreconciled_amount')
@@ -111,6 +112,9 @@ class AccountPaymentGroup(models.Model):
         res = super(AccountPaymentGroup, self).confirm()
         for rec in self:
             if rec.company_id.automatic_withholdings:
+                rec.payment_date = fields.Date.today()
+                withholding_lines = rec.payment_ids.filtered(lambda x: x.tax_withholding_id)
+                withholding_lines.unlink()
                 rec.compute_withholdings()
         return res
 
@@ -133,6 +137,9 @@ class AccountPaymentGroup(models.Model):
             withholdable_invoiced_amount = self[untaxed_field]
         else:
             withholdable_invoiced_amount = self[total_field]
+
+        if self._context.get('currency_id'):
+            withholdable_invoiced_amount = self.get_amount_currency_usd()
 
         withholdable_advanced_amount = 0.0
         # if the unreconciled_amount is negative, then the user wants to make
@@ -195,3 +202,13 @@ class AccountPaymentGroup(models.Model):
                 withholdable_advanced_amount = \
                     self.withholdable_advanced_amount
         return (withholdable_advanced_amount, withholdable_invoiced_amount)
+    
+    def post(self):
+        for rec in self:
+            rec.payment_date = fields.Date.today()
+            withholding_lines = rec.payment_ids.filtered(lambda x: x.tax_withholding_id)
+            if withholding_lines:
+                withholding_lines.unlink()
+                rec.compute_withholdings()
+                rec.env.cr.commit()
+        return super(AccountPaymentGroup, self).post()
