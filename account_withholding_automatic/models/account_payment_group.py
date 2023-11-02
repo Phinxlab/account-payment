@@ -70,7 +70,10 @@ class AccountPaymentGroup(models.Model):
                 line.price_total
         amount_untaxed = amount_untaxed
         amount_tax = amount_tax
-        amount = to_pay_amount_currency * amount_untaxed / amount_tax
+        if amount_tax != 0:
+            amount = to_pay_amount_currency * amount_untaxed / amount_tax
+        else:
+            amount = to_pay_amount_currency
         return amount
 
     @api.depends(
