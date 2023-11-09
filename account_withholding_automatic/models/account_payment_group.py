@@ -36,7 +36,10 @@ class AccountPaymentGroup(models.Model):
             currency_id = rec.lines_same_currency_id or rec.company_id.currency_id
             if self._context.get('payment_acumulate'):
                 amount_currency = rec.matched_amount_untaxed 
-                amount_currency_usd = rec.company_id.currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
+                if currency_id == currency_usd:
+                    amount_currency_usd = amount_currency / rec.lines_rate
+                else:
+                    amount_currency_usd = rec.company_id.currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
             else:
                 amount_currency = rec._get_mached_amount_untaxed(rec.to_pay_amount_currency)
                 amount_currency_usd = currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
