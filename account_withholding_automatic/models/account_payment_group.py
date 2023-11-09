@@ -37,7 +37,7 @@ class AccountPaymentGroup(models.Model):
             if self._context.get('payment_acumulate'):
                 amount_currency = rec.matched_amount_untaxed 
                 if currency_id == currency_usd:
-                    amount_currency_usd = amount_currency / rec.lines_rate
+                    amount_currency_usd = rec._get_matched_amount_untaxed_currency()
                 else:
                     amount_currency_usd = rec.company_id.currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
             else:
@@ -63,6 +63,20 @@ class AccountPaymentGroup(models.Model):
                 matched_amount_untaxed += \
                     line.payment_group_matched_amount * factor
             rec.matched_amount_untaxed = sign * matched_amount_untaxed
+
+    def _get_matched_amount_untaxed_currency(self):
+        for rec in self:
+            matched_amount_untaxed_currency = 0.0
+            if rec.state != 'posted':
+                continue
+            sign = rec.partner_type == 'supplier' and -1.0 or 1.0
+            for line in rec.matched_move_line_ids.with_context(
+                    payment_group_id=rec.id):
+                invoice = line.move_id
+                factor = invoice and invoice._get_tax_factor() or 1.0
+                matched_amount_untaxed_currency += \
+                    line.payment_group_matched_amount_currency * factor
+            return sign * matched_amount_untaxed_currency
 
     def _get_mached_amount_untaxed(self, to_pay_amount_currency):
         amount_untaxed = 0.0

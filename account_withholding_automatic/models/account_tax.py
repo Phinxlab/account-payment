@@ -277,9 +277,13 @@ result = withholdable_base_amount * 0.10
         
         
         if accumulated_amount:
-            accumulated_amount = currency_usd._convert(accumulated_amount, currency_id, payment_group.company_id, payment_group.payment_date)
             if currency_id !=  payment_group.company_id.currency_id:
-                accumulated_amount = accumulated_amount * payment_group.lines_rate
+                if currency_id == self.env.ref('base.USD'):
+                    accumulated_amount = accumulated_amount * payment_group.lines_rate
+                else:
+                    accumulated_amount = currency_usd._convert(accumulated_amount, currency_id, payment_group.company_id, payment_group.payment_date)     
+            else:
+                accumulated_amount = currency_usd._convert(accumulated_amount, currency_id, payment_group.company_id, payment_group.payment_date)
         if withholdable_advanced_amount:
             withholdable_advanced_amount = currency_usd._convert(withholdable_advanced_amount, currency_id, payment_group.company_id, payment_group.payment_date)
             if currency_id !=  payment_group.company_id.currency_id:
