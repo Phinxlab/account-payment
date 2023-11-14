@@ -264,10 +264,10 @@ result = withholdable_base_amount * 0.10
 
             for same_period_payment_group in same_period_payments:
                 same_period_amounts = \
-                    same_period_payment_group.with_context(payment_acumulate=True)._get_withholdable_amounts(
+                    same_period_payment_group.with_context(currency_id=currency_id,payment_acumulate=True)._get_withholdable_amounts(
                         withholding_amount_type, self.withholding_advances)
                 accumulated_amount += \
-                    same_period_amounts[0] + same_period_amounts[1]
+                    same_period_amounts[1]
             previous_withholding_amount = sum(
                 self.env['account.payment'].search(
                     previos_payments_domain).mapped('amount_company_currency'))

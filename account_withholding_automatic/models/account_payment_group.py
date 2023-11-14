@@ -29,13 +29,20 @@ class AccountPaymentGroup(models.Model):
         currency_field='currency_id',
     )
     
-    def get_amount_currency_usd(self):
+    def get_amount_currency(self):
         for rec in self:
             amount_currency_usd = 0
             currency_usd = self.env.ref('base.USD')
             currency_id = rec.lines_same_currency_id or rec.company_id.currency_id
-            amount_currency = rec._get_mached_amount_untaxed(rec.to_pay_amount_currency)
-            amount_currency_usd = currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
+            if self._context.get('payment_acumulate'):
+                amount_currency = rec.matched_amount_untaxed 
+                if currency_id != rec.company_id.currency_id:
+                    return (rec._get_matched_amount_untaxed_currency() * rec.lines_rate)
+                else:
+                    return amount_currency
+            else:
+                amount_currency = rec._get_mached_amount_untaxed(rec.to_pay_amount_currency)
+                amount_currency_usd = currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
                 
             return amount_currency_usd
 
@@ -173,8 +180,8 @@ class AccountPaymentGroup(models.Model):
         else:
             withholdable_invoiced_amount = self[total_field]
 
-        if self._context.get('currency_id') and not self._context.get('payment_acumulate'):
-            withholdable_invoiced_amount = self.get_amount_currency_usd()
+        if self._context.get('currency_id'):
+            withholdable_invoiced_amount = self.get_amount_currency()
 
         withholdable_advanced_amount = 0.0
         # if the unreconciled_amount is negative, then the user wants to make
