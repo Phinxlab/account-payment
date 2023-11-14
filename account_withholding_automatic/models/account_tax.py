@@ -264,10 +264,10 @@ result = withholdable_base_amount * 0.10
 
             for same_period_payment_group in same_period_payments:
                 same_period_amounts = \
-                    same_period_payment_group.with_context(currency_id=currency_id,payment_acumulate=True)._get_withholdable_amounts(
+                    same_period_payment_group.with_context(payment_acumulate=True)._get_withholdable_amounts(
                         withholding_amount_type, self.withholding_advances)
                 accumulated_amount += \
-                    same_period_amounts[1] # No contemplamos los adelantos
+                    same_period_amounts[0] + same_period_amounts[1]
             previous_withholding_amount = sum(
                 self.env['account.payment'].search(
                     previos_payments_domain).mapped('amount_company_currency'))
@@ -276,14 +276,6 @@ result = withholdable_base_amount * 0.10
         currency_usd = self.env.ref('base.USD')
         
         
-        if accumulated_amount:
-            if currency_id !=  payment_group.company_id.currency_id:
-                if currency_id == self.env.ref('base.USD'):
-                    accumulated_amount = accumulated_amount * payment_group.lines_rate
-                else:
-                    accumulated_amount = currency_usd._convert(accumulated_amount, currency_id, payment_group.company_id, payment_group.payment_date)     
-            else:
-                accumulated_amount = currency_usd._convert(accumulated_amount, currency_id, payment_group.company_id, payment_group.payment_date)
         if withholdable_advanced_amount:
             withholdable_advanced_amount = currency_usd._convert(withholdable_advanced_amount, currency_id, payment_group.company_id, payment_group.payment_date)
             if currency_id !=  payment_group.company_id.currency_id:

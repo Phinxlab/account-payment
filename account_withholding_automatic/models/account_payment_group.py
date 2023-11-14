@@ -34,15 +34,8 @@ class AccountPaymentGroup(models.Model):
             amount_currency_usd = 0
             currency_usd = self.env.ref('base.USD')
             currency_id = rec.lines_same_currency_id or rec.company_id.currency_id
-            if self._context.get('payment_acumulate'):
-                amount_currency = rec.matched_amount_untaxed 
-                if currency_id == currency_usd:
-                    amount_currency_usd = rec._get_matched_amount_untaxed_currency()
-                else:
-                    amount_currency_usd = rec.company_id.currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
-            else:
-                amount_currency = rec._get_mached_amount_untaxed(rec.to_pay_amount_currency)
-                amount_currency_usd = currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
+            amount_currency = rec._get_mached_amount_untaxed(rec.to_pay_amount_currency)
+            amount_currency_usd = currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
                 
             return amount_currency_usd
 
@@ -180,7 +173,7 @@ class AccountPaymentGroup(models.Model):
         else:
             withholdable_invoiced_amount = self[total_field]
 
-        if self._context.get('currency_id'):
+        if self._context.get('currency_id') and not self._context.get('payment_acumulate'):
             withholdable_invoiced_amount = self.get_amount_currency_usd()
 
         withholdable_advanced_amount = 0.0
