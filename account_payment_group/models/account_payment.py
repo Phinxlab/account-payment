@@ -144,6 +144,7 @@ class AccountPayment(models.Model):
                     rec.currency_id._convert(
                         rec.amount, rec.company_id.currency_id,
                         rec.company_id, rec.date):
+                rec.amount =  rec.amount_company_currency / rec.exchange_rate
                 force_amount_company_currency = rec.amount_company_currency
             else:
                 force_amount_company_currency = False
