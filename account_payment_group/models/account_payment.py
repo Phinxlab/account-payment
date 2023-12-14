@@ -144,7 +144,12 @@ class AccountPayment(models.Model):
                     rec.currency_id._convert(
                         rec.amount, rec.company_id.currency_id,
                         rec.company_id, rec.date):
-                rec.amount =  rec.amount_company_currency / rec.exchange_rate
+                if rec.exchange_rate:
+                    rec.amount =  rec.amount_company_currency / rec.exchange_rate
+                else:
+                    rec.amount = rec.company_id.currency_id._convert(
+                        rec.amount_company_currency, rec.currency_id,
+                        rec.company_id, rec.date)
                 force_amount_company_currency = rec.amount_company_currency
             else:
                 force_amount_company_currency = False
@@ -160,7 +165,7 @@ class AccountPayment(models.Model):
         for rec in self:
             if not rec.other_currency:
                 amount_company_currency = rec.amount
-            elif rec.force_amount_company_currency:
+            elif rec.force_amount_company_currency and rec.exchange_rate:
                 amount_company_currency = rec.amount * rec.exchange_rate
             else:
                 amount_company_currency = rec.currency_id._convert(
