@@ -33,6 +33,7 @@ class AccountPaymentGroup(models.Model):
         for rec in self:
             amount_currency_usd = 0
             currency_usd = self.env.ref('base.USD')
+            currency_ars = self.env.ref('base.ARS')
             currency_id = rec.lines_same_currency_id or rec.company_id.currency_id
             if self._context.get('payment_acumulate'):
                 amount_currency = rec.matched_amount_untaxed 
@@ -42,8 +43,10 @@ class AccountPaymentGroup(models.Model):
                     return amount_currency
             else:
                 amount_currency = rec._get_mached_amount_untaxed(rec.to_pay_amount_currency)
-                amount_currency_usd = currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
-                
+                if currency_id != currency_ars:
+                    amount_currency_usd = currency_id._convert(amount_currency, currency_usd, rec.company_id, rec.payment_date)
+                else:
+                    return amount_currency
             return amount_currency_usd
 
     def _compute_matched_amount_untaxed(self):
