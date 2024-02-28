@@ -27,8 +27,11 @@ class AccountPayment(models.Model):
 
     # New third check info
     l10n_latam_check_bank_id = fields.Many2one(
-        'res.bank', readonly=True, states={'draft': [('readonly', False)]},
-        compute='_compute_l10n_latam_check_data', store=True, string='Check Bank')
+        'res.bank', 
+        # readonly=True, 
+        states={'draft': [('readonly', False)], 'posted': [('readonly', True)]},
+        # compute='_compute_l10n_latam_check_data', store=True, 
+        string='Check Bank')
     l10n_latam_check_issuer_vat = fields.Char(
         readonly=True, states={'draft': [('readonly', False)]},
         compute='_compute_l10n_latam_check_data', store=True, string='Check Issuer VAT')
@@ -77,7 +80,7 @@ class AccountPayment(models.Model):
         new_third_checks = self.filtered(lambda x: x.payment_method_line_id.code == 'new_third_checks')
         for rec in new_third_checks:
             rec.update({
-                'l10n_latam_check_bank_id': rec.partner_id.bank_ids and rec.partner_id.bank_ids[0].bank_id or False,
+                # 'l10n_latam_check_bank_id': rec.partner_id.bank_ids and rec.partner_id.bank_ids[0].bank_id or False,
                 'l10n_latam_check_issuer_vat': rec.partner_id.vat,
             })
 
