@@ -21,6 +21,17 @@ class AccountPaymentGroup(models.Model):
         help="Change rate to use"
     )
 
+    def write(self, vals):
+        res = super(AccountPaymentGroup,self).write(vals)
+        if 'lines_rate' in vals:
+            for payment in self.payment_ids:
+                payment.write({'exchange_rate':vals['lines_rate']})
+                payment.write({'amount_company_currency':payment.amount*vals['lines_rate']})
+                payment.move_id.write({'l10n_ar_currency_rate':vals['lines_rate']})
+                payment.move_id._compute_amount()
+        return res
+
+
     @api.onchange('lines_same_currency_id')
     def onchange_lines_same_currency_id(self):
         if self.lines_same_currency_id and self.lines_rate == float(0):
