@@ -18,6 +18,7 @@ class AccountPaymentGroup(models.Model):
 
     lines_rate = fields.Monetary(
         string="Currency rate",
+        tracking=True,
         help="Change rate to use"
     )
 
