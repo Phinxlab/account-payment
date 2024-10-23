@@ -470,10 +470,10 @@ class AccountPaymentGroup(models.Model):
             # (expenses por ejemplo), en ese caso salteamos la dobule validation
             
             if rec.lines_same_currency_id:
-                if (rec.payment_subtype == 'double_validation' and rec.payment_difference_currency and not created_automatically):
+                if (rec.payment_subtype == 'double_validation' and (rec.payment_difference_currency > (rec.to_pay_amount_currency * 0.0005) or rec.payment_difference_currency < (rec.to_pay_amount_currency * 0.0005 * -1)) and not created_automatically):
                     raise ValidationError(_('To Pay Amount and Payment Amount must be equal!'))
             else:
-                if (rec.payment_subtype == 'double_validation' and rec.payment_difference and not created_automatically):
+                if (rec.payment_subtype == 'double_validation' and(rec.payment_difference > (rec.to_pay_amount * 0.0005) or rec.payment_difference < (rec.to_pay_amount * 0.0005 * -1))and not created_automatically):
                     raise ValidationError(_('To Pay Amount and Payment Amount must be equal!'))
 
             # if the partner of the payment is different of ht payment group we change it.
