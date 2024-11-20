@@ -13,6 +13,7 @@ class AccountPaymentGroup(models.Model):
         'res.currency',
         string='Currency',
         compute='_compute_lines_same_currency_id',
+        inverse='_inverse_lines_same_currency_id',
         store=True
     )
 
@@ -32,6 +33,8 @@ class AccountPaymentGroup(models.Model):
                 payment.move_id._compute_amount()
         return res
 
+    def _inverse_lines_same_currency_id(self):
+        return True
 
     @api.onchange('lines_same_currency_id')
     def onchange_lines_same_currency_id(self):
