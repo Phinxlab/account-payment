@@ -274,6 +274,7 @@ result = withholdable_base_amount * 0.10
         
         currency_id =  payment_group.lines_same_currency_id if (payment_group.lines_same_currency_id and payment_group.lines_same_currency_id != payment_group.company_id.currency_id) else  payment_group.company_id.currency_id
         currency_usd = self.env.ref('base.USD')
+        currency_ars = self.env.ref('base.ARS')
         
         
         if withholdable_advanced_amount:
@@ -281,9 +282,10 @@ result = withholdable_base_amount * 0.10
             if currency_id !=  payment_group.company_id.currency_id:
                 withholdable_advanced_amount = withholdable_advanced_amount * payment_group.lines_rate
         if withholdable_invoiced_amount:
-            withholdable_invoiced_amount = currency_usd._convert(withholdable_invoiced_amount, currency_id, payment_group.company_id, payment_group.payment_date)
-            if currency_id !=  payment_group.company_id.currency_id:
-                withholdable_invoiced_amount = withholdable_invoiced_amount * payment_group.lines_rate            
+            if currency_id != currency_ars:
+                withholdable_invoiced_amount = currency_usd._convert(withholdable_invoiced_amount, currency_id, payment_group.company_id, payment_group.payment_date)
+                if currency_id !=  payment_group.company_id.currency_id:
+                    withholdable_invoiced_amount = withholdable_invoiced_amount * payment_group.lines_rate            
 
         total_amount = (
             accumulated_amount +
