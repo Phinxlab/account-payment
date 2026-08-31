@@ -81,4 +81,23 @@
     </field>
 </record>
 
+<!-- La cotizacion de cada linea tiene que estar en la subvista del o2m: el
+     onchange de lines_rate (_onchange_lines_rate_propose_to_payments) propone
+     exchange_rate a las lineas en borrador, pero el diff del onchange solo
+     viaja al cliente para los campos que estan en la vista (models.Snapshot).
+     Sin esta columna la propuesta se veia en l10n_ar_amount_company_currency_signed
+     -que si esta- pero no se guardaba, y al recargar volvia el valor viejo. -->
+<record id="view_account_payment_from_group_tree" model="ir.ui.view">
+    <field name="name">account.payment.tree.rate</field>
+    <field name="model">account.payment</field>
+    <field name="inherit_id" ref="account_payment_group.view_account_payment_from_group_tree"/>
+    <field name="arch" type="xml">
+        <field name="l10n_ar_amount_company_currency_signed" position="before">
+            <field name="exchange_rate" string="Cotizacion" optional="hide"
+                   attrs="{'column_invisible': [('parent.lines_same_currency_id', '=', False)]}"/>
+        </field>
+    </field>
+</record>
+
+
 </odoo>

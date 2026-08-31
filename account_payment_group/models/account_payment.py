@@ -8,6 +8,16 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
+# Tupla que usa el guard de account.payment._synchronize_to_moves en Odoo 15
+# (odoo/addons/account/models/account_payment.py:836-839).
+# REVISAR en cada upgrade de core.
+CORE_TRIGGER_FIELDS = (
+    'date', 'amount', 'payment_type', 'partner_type', 'payment_reference',
+    'is_internal_transfer', 'currency_id', 'partner_id',
+    'destination_account_id', 'partner_bank_id', 'journal_id',
+)
+
+
 class AccountPayment(models.Model):
     _inherit = "account.payment"
 
@@ -21,21 +31,29 @@ class AccountPayment(models.Model):
         compute='_compute_amount_company_currency',
         inverse='_inverse_amount_company_currency',
         currency_field='company_currency_id',
+        help="En borrador se deriva de amount x cotizacion. Una vez "
+             "contabilizado se lee del asiento: el mayor es la unica fuente de "
+             "verdad, no se guarda una copia que pueda desviarse.",
     )
     other_currency = fields.Boolean(
         compute='_compute_other_currency',
     )
+    # DEPRECADO - no usar en codigo nuevo. Columna conservada para no migrar los
+    # 6.813 pagos historicos. Ya no participa del calculo ni del asiento.
     force_amount_company_currency = fields.Monetary(
-        string='Forced Amount on Company Currency',
+        string='Forced Amount on Company Currency (DEPRECADO)',
         currency_field='company_currency_id',
         copy=False,
+        readonly=True,
     )
     exchange_rate = fields.Float(
         string='Exchange Rate',
-        # compute='_compute_exchange_rate',
-        # readonly=False,
-        # inverse='_inverse_exchange_rate',
-        digits=(16, 4),
+        # 10 decimales (antes 4): con 4, 32 de 3.189 pagos FX de produccion no
+        # cierran al centavo. NO requiere migracion: fields.Float con digits
+        # mapea a numeric sin precision declarada, el digits solo redondea en
+        # Python.
+        digits=(16, 10),
+        copy=False,
     )
     l10n_ar_amount_company_currency_signed = fields.Monetary(
         currency_field='company_currency_id', compute='_compute_l10n_ar_amount_company_currency_signed')
@@ -99,13 +117,110 @@ class AccountPayment(models.Model):
             else:
                 payment.l10n_ar_amount_company_currency_signed = payment.amount_company_currency
 
-    @api.depends('currency_id')
+    # ---------------- helpers ----------------
+
+    def _seek_liquidity_lines(self):
+        """ Version acotada de _seek_for_lines(): solo la ranura de liquidez.
+
+        Dos diferencias con el core, ambas deliberadas:
+        1. _get_valid_liquidity_accounts() se resuelve UNA vez (el core lo
+           llama por cada linea del asiento).
+        2. Se conserva el fallback del core: si el asiento no tiene ninguna
+           linea en una cuenta de liquidez vigente -- tipico de pagos viejos
+           cuyo diario cambio de cuenta transitoria -- se toma la unica linea
+           que no es de deudas/creditos. Sin este fallback los historicos
+           divergentes seguirian mostrando amount x cotizacion en vez del
+           mayor, que es justamente lo que este rediseno corrige.
+        """
+        self.ensure_one()
+        if not self.move_id:
+            return self.env['account.move.line']
+        valid_accounts = self._get_valid_liquidity_accounts()
+        liquidity_lines = self.env['account.move.line']
+        other_lines = self.env['account.move.line']
+        for line in self.move_id.line_ids:
+            if line.account_id in valid_accounts:
+                liquidity_lines |= line
+            elif line.account_id.internal_type not in ('receivable', 'payable') \
+                    and line.account_id != line.company_id.transfer_account_id:
+                other_lines |= line
+        if not liquidity_lines and len(other_lines) == 1:
+            return other_lines
+        return liquidity_lines
+
+    def _get_payment_exchange_rate(self):
+        """ UNICO punto de extension para decidir que cotizacion aplica.
+        Reemplaza los computes copiados en currency_rate_add_percent y
+        rate_customize_payment.
+
+        La cotizacion pactada en el grupo (lines_rate) la agrega
+        account_payment_group_currency, que es el modulo que define ese campo:
+        este modulo no puede depender de el ni nombrarlo en un @api.depends,
+        porque se carga antes. """
+        self.ensure_one()
+        if not self.other_currency:
+            return 1.0
+        return self.currency_id._convert(
+            1.0, self.company_currency_id, self.company_id,
+            self.date or fields.Date.context_today(self), round=False)
+
+    def _get_effective_exchange_rate(self):
+        self.ensure_one()
+        return self.exchange_rate or self._get_payment_exchange_rate()
+
+    # ---------------- computes ----------------
+
+    @api.depends('currency_id', 'company_currency_id')
     def _compute_other_currency(self):
         for rec in self:
-            rec.other_currency = False
-            if rec.company_currency_id and rec.currency_id and \
-               rec.company_currency_id != rec.currency_id:
-                rec.other_currency = True
+            rec.other_currency = bool(
+                rec.company_currency_id and rec.currency_id
+                and rec.company_currency_id != rec.currency_id)
+
+    @api.depends('amount', 'exchange_rate', 'other_currency',
+                 'move_id.state',
+                 'move_id.line_ids.debit', 'move_id.line_ids.credit',
+                 'move_id.line_ids.account_id')
+    def _compute_amount_company_currency(self):
+        """ misma moneda -> amount | contabilizado -> el asiento |
+            borrador -> amount x cotizacion """
+        for rec in self:
+            if not rec.other_currency:
+                rec.amount_company_currency = rec.amount
+                continue
+            liquidity_lines = rec._seek_liquidity_lines()
+            if rec.move_id.state != 'draft' and liquidity_lines:
+                rec.amount_company_currency = abs(
+                    sum(liquidity_lines.mapped('balance')))
+            else:
+                rec.amount_company_currency = rec.company_currency_id.round(
+                    rec.amount * rec._get_effective_exchange_rate())
+
+    @api.onchange('amount_company_currency')
+    def _inverse_amount_company_currency(self):
+        """ Editar el importe en moneda de compania AJUSTA LA COTIZACION.
+        Ya no existe un importe forzado paralelo. Es inverse (write) y onchange
+        (feedback en vivo). Idempotente: con 10 decimales el round-trip cierra. """
+        for rec in self:
+            if not rec.other_currency or not rec.amount:
+                continue
+            if rec.move_id.state != 'draft':
+                continue          # un pago posteado no se re-cotiza por edicion
+            rec.exchange_rate = rec.amount_company_currency / rec.amount
+
+    def write(self, vals):
+        """ Cuando la cotizacion y el importe en moneda de compania vienen en la
+        misma escritura, manda la cotizacion.
+
+        amount_company_currency es derivado y su inverse corre DESPUES de las
+        escrituras directas: si el cliente manda el importe viejo junto con una
+        cotizacion nueva -el caso del onchange del encabezado, que propone
+        exchange_rate a la linea- el inverse recalcularia exchange_rate a partir
+        del importe viejo y revertiria la cotizacion sin ningun error. """
+        if vals.get('exchange_rate') and 'amount_company_currency' in vals:
+            vals = {k: v for k, v in vals.items()
+                    if k != 'amount_company_currency'}
+        return super().write(vals)
 
     @api.onchange('payment_group_id')
     def onchange_payment_group_id(self):
@@ -117,62 +232,6 @@ class AccountPayment(models.Model):
             self.partner_id = self.payment_group_id.partner_id
             self.payment_type = 'inbound' if self.payment_group_id.partner_type  == 'customer' else 'outbound'
             self.amount = self.payment_group_id.payment_difference
-
-    # @api.depends('amount', 'other_currency', 'amount_company_currency')
-    # def _compute_exchange_rate(self):
-    #     for rec in self:
-    #         if rec.other_currency:
-    #             rec.exchange_rate = rec.amount and (
-    #                 rec.amount_company_currency / rec.amount) or 0.0
-    #         else:
-    #             rec.exchange_rate = False
-
-    # @api.onchange('exchange_rate')
-    # def _inverse_exchange_rate(self):
-    #     for rec in self:
-    #         if rec.other_currency:
-    #             rec.amount_company_currency = rec.amount * rec.exchange_rate
-
-    # this onchange is necesary because odoo, sometimes, re-compute
-    # and overwrites amount_company_currency. That happends due to an issue
-    # with rounding of amount field (amount field is not change but due to
-    # rouding odoo believes amount has changed)
-    @api.onchange('amount_company_currency')
-    def _inverse_amount_company_currency(self):
-        for rec in self:
-            if rec.other_currency and rec.amount_company_currency != \
-                    rec.currency_id._convert(
-                        rec.amount, rec.company_id.currency_id,
-                        rec.company_id, rec.date):
-                # if rec.exchange_rate:
-                #     rec.amount =  rec.amount_company_currency / rec.exchange_rate
-                # else:
-                #     rec.amount = rec.company_id.currency_id._convert(
-                #         rec.amount_company_currency, rec.currency_id,
-                #         rec.company_id, rec.date)
-                force_amount_company_currency = rec.amount_company_currency
-            else:
-                force_amount_company_currency = False
-            rec.force_amount_company_currency = force_amount_company_currency
-
-    @api.depends('amount', 'other_currency', 'force_amount_company_currency')
-    def _compute_amount_company_currency(self):
-        """
-        * Si las monedas son iguales devuelve 1
-        * si no, si hay force_amount_company_currency, devuelve ese valor
-        * sino, devuelve el amount convertido a la moneda de la cia
-        """
-        for rec in self:
-            if not rec.other_currency:
-                amount_company_currency = rec.amount
-            # elif rec.force_amount_company_currency and rec.exchange_rate:
-            elif rec.force_amount_company_currency:
-                amount_company_currency = rec.amount * rec.exchange_rate
-            else:
-                amount_company_currency = rec.currency_id._convert(
-                    rec.amount, rec.company_id.currency_id,
-                    rec.company_id, rec.date)
-            rec.amount_company_currency = amount_company_currency
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -231,28 +290,67 @@ class AccountPayment(models.Model):
         self.ensure_one()
         return self.payment_group_id.get_formview_action()
 
+    # ---------------- asiento ----------------
+
     def _prepare_move_line_default_vals(self, write_off_line_vals=None):
-        res = super()._prepare_move_line_default_vals(write_off_line_vals=write_off_line_vals)
-        if self.force_amount_company_currency:
-            difference = self.force_amount_company_currency - res[0]['credit'] - res[0]['debit']
-            if res[0]['credit']:
-                liquidity_field = 'credit'
-                counterpart_field = 'debit'
-            else:
-                liquidity_field = 'debit'
-                counterpart_field = 'credit'
-            res[0].update({
-                liquidity_field: self.force_amount_company_currency,
-            })
-            res[1].update({
-                counterpart_field: res[1][counterpart_field] + difference,
-            })
+        """ El asiento se arma SIEMPRE con amount x exchange_rate.
+        Tambien corrige el manejo de signos: antes se hacia
+        'force - credit - debit' asumiendo cual de los dos era cero. """
+        res = super()._prepare_move_line_default_vals(
+            write_off_line_vals=write_off_line_vals)
+
+        if not self.other_currency or not self.exchange_rate:
+            return res
+
+        liquidity_vals, counterpart_vals = res[0], res[1]
+        liquidity_balance = self.company_currency_id.round(
+            liquidity_vals['amount_currency'] * self.exchange_rate)
+        difference = liquidity_balance - (
+            liquidity_vals['debit'] - liquidity_vals['credit'])
+        if self.company_currency_id.is_zero(difference):
+            return res
+
+        liquidity_vals.update({
+            'debit': liquidity_balance if liquidity_balance > 0.0 else 0.0,
+            'credit': -liquidity_balance if liquidity_balance < 0.0 else 0.0,
+        })
+        # El descuadre va integro a la contrapartida. Las lineas de write-off no
+        # se tocan: ya estan contempladas en el balance que calculo el core.
+        counterpart_balance = (
+            counterpart_vals['debit'] - counterpart_vals['credit']) - difference
+        counterpart_vals.update({
+            'debit': counterpart_balance if counterpart_balance > 0.0 else 0.0,
+            'credit': -counterpart_balance if counterpart_balance < 0.0 else 0.0,
+        })
         return res
+
+    # ---------------- sincronizacion ----------------
 
     @api.model
     def _get_trigger_fields_to_sincronize(self):
-        res = super()._get_trigger_fields_to_sincronize()
-        return res + ('force_amount_company_currency',)
+        """ Backport de v16. En v15 el core NO define este metodo, con lo cual
+        los overrides de este modulo y de l10n_ar_ux eran codigo muerto. """
+        return CORE_TRIGGER_FIELDS + ('exchange_rate',)
+
+    def _synchronize_to_moves(self, changed_fields):
+        """ Hace que el hook sea el registro efectivo de campos que disparan la
+        resincronizacion. Si cambio uno de NUESTROS campos extra, agregamos
+        'amount' para que el guard del core deje pasar.
+
+        Solo para pagos cuyo asiento YA tiene lineas: al crear desde el form, el
+        inverse de amount_company_currency escribe exchange_rate antes de que
+        account.payment.create() arme line_ids. Si forzaramos la resincronizacion
+        ahi, el core crearia la linea de liquidez y despues create() agregaria
+        otra, y el asiento quedaria con dos (UserError "one and only one
+        outstanding payments/receipts account"). """
+        extra = set(self._get_trigger_fields_to_sincronize()) - set(CORE_TRIGGER_FIELDS)
+        if not (extra & set(changed_fields)):
+            return super()._synchronize_to_moves(changed_fields)
+        with_lines = self.filtered(lambda pay: pay.move_id.line_ids)
+        res = super(AccountPayment, with_lines)._synchronize_to_moves(
+            set(changed_fields) | {'amount'})
+        super(AccountPayment, self - with_lines)._synchronize_to_moves(changed_fields)
+        return res
 
     @api.depends_context('default_is_internal_transfer')
     def _compute_is_internal_transfer(self):
@@ -267,7 +365,7 @@ class AccountPayment(models.Model):
     def _create_paired_internal_transfer_payment(self):
         for rec in self:
             super(AccountPayment, rec.with_context(
-                default_force_amount_company_currency=rec.force_amount_company_currency
+                default_exchange_rate=rec.exchange_rate
             ))._create_paired_internal_transfer_payment()
 
     @api.onchange("payment_type")
@@ -279,3 +377,24 @@ class AccountPayment(models.Model):
             else:
                 rec.label_journal_id = "Diario de destino"
                 rec.label_destination_journal_id = "Diario de origen"
+
+    # ---------------- red de seguridad ----------------
+
+    @api.constrains('amount', 'exchange_rate', 'move_id')
+    def _check_move_matches_payment(self):
+        """ Invariante que el modulo violo 232 veces sin que nadie se enterara. """
+        for rec in self:
+            if not rec.other_currency or rec.move_id.state == 'draft':
+                continue
+            liquidity_lines = rec._seek_liquidity_lines()
+            if not liquidity_lines:
+                continue
+            asiento = abs(sum(liquidity_lines.mapped('balance')))
+            esperado = rec.company_currency_id.round(
+                rec.amount * rec._get_effective_exchange_rate())
+            if abs(asiento - esperado) > 1.0:      # tolerancia por redondeos
+                raise ValidationError(_(
+                    "El asiento del pago %s tiene %s en moneda de compania pero "
+                    "el importe %s a cotizacion %s da %s."
+                ) % (rec.display_name, asiento, rec.amount,
+                     rec._get_effective_exchange_rate(), esperado))
