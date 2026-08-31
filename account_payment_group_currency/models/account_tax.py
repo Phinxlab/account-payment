@@ -20,19 +20,30 @@ class AccountTax(models.Model):
                         ('automatic', '=', True),
                     ], limit=1)
                 if payment_withholding:
-                    vals2update = {'currency_id': payment_group.lines_same_currency_id}
-                    if payment_group.lines_rate > 0:
-                        vals2update['amount'] = payment_withholding.amount / payment_group.lines_rate
-                        vals2update['exchange_rate'] = payment_group.lines_rate
-                        vals2update['amount_company_currency'] = payment_withholding.amount
-                    else:
-                        vals2update['amount'] = payment_group.company_id.currency_id._convert(
-                            payment_withholding.amount,
-                            payment_group.lines_same_currency_id,
-                            payment_group.company_id,
-                            payment_group.payment_date)
-                    vals2update['amount_company_currency'] = payment_withholding.amount
-                    payment_withholding.write(vals2update)
+                    group_currency = payment_group.lines_same_currency_id
+                    # La cotizacion se pide por el UNICO punto de extension
+                    # (_get_payment_exchange_rate) para que la retencion se
+                    # value igual que el resto de las lineas del grupo: en los
+                    # recibos de cliente, a tipo de cambio vendedor.
+                    # Se consulta sobre un registro en memoria porque la
+                    # retencion todavia esta en moneda de compania y el hook,
+                    # preguntado sobre ella, devolveria 1.
+                    probe = payment_withholding.new({
+                        'payment_group_id': payment_group.id,
+                        'company_id': payment_group.company_id.id,
+                        'currency_id': group_currency.id,
+                        'date': payment_group.payment_date,
+                    })
+                    rate = probe._get_payment_exchange_rate()
+                    if not rate:
+                        continue
+                    payment_withholding.write({
+                        'currency_id': group_currency.id,
+                        'amount': group_currency.round(
+                            payment_withholding.amount / rate),
+                        'exchange_rate': rate,
+                        # amount_company_currency NO se escribe: es derivado
+                    })
         return res
 
 
