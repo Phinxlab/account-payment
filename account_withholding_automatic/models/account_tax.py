@@ -282,9 +282,10 @@ result = withholdable_base_amount * 0.10
         
         
         if withholdable_advanced_amount:
-            withholdable_advanced_amount = currency_usd._convert(withholdable_advanced_amount, currency_id, payment_group.company_id, payment_group.payment_date)
-            if currency_id !=  payment_group.company_id.currency_id:
-                withholdable_advanced_amount = withholdable_advanced_amount * payment_group.lines_rate
+            if currency_id != currency_ars:
+                withholdable_advanced_amount = currency_usd._convert(withholdable_advanced_amount, currency_id, payment_group.company_id, payment_group.payment_date)
+                if currency_id !=  payment_group.company_id.currency_id:
+                    withholdable_advanced_amount = withholdable_advanced_amount * payment_group.lines_rate
         if withholdable_invoiced_amount:
             if currency_id != currency_ars:
                 withholdable_invoiced_amount = currency_usd._convert(withholdable_invoiced_amount, currency_id, payment_group.company_id, payment_group.payment_date)
