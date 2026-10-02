@@ -273,7 +273,7 @@ result = withholdable_base_amount * 0.10
                     previos_payments_domain).mapped('amount_company_currency'))
         
             # si es el regimen 739 no se acumulan pagos para formar la base imponible
-            if self.payment_group_id.regimen_ganancias_id.codigo_de_regimen == '739':
+            if payment_group.regimen_ganancias_id.codigo_de_regimen == '739':
                 previous_withholding_amount = 0
         
         currency_id =  payment_group.lines_same_currency_id if (payment_group.lines_same_currency_id and payment_group.lines_same_currency_id != payment_group.company_id.currency_id) else  payment_group.company_id.currency_id
