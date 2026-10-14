@@ -20,6 +20,14 @@ class AccountPayment(models.Model):
             self.other_currency and group.lines_rate
             and self.currency_id == group.lines_same_currency_id)
 
+    def _get_fixed_company_amount(self):
+        """ Importe en moneda de compania que la linea tiene que respetar al
+        centavo aunque este expresada en otra moneda (un cheque de terceros en
+        pesos en un grupo en USD). 0.0 si no hay ninguno: la linea se cotiza
+        con la cotizacion del encabezado. """
+        self.ensure_one()
+        return 0.0
+
     def _get_payment_exchange_rate(self):
         """ La cotizacion pactada en el grupo manda sobre la del dia.
         Vive aca y no en account_payment_group porque lines_rate lo define este

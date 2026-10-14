@@ -40,7 +40,46 @@ class AccountPaymentGroup(models.Model):
             return self.env['account.payment']
         return self.payment_ids.filtered(
             lambda p: p.state == 'draft' and p.other_currency
+            and p.currency_id == self.lines_same_currency_id
+            and not p._get_fixed_company_amount())
+
+    def _get_payment_vals_for_company_amount(self, company_amount):
+        """ Valores de una linea que tiene que valer EXACTAMENTE
+        company_amount en moneda de compania (un cheque de terceros en pesos)
+        en un grupo en moneda extranjera: la linea va en la moneda del
+        encabezado, el importe sale de lines_rate y la cotizacion se ajusta para
+        que amount x exchange_rate reproduzca el importe al centavo (con 10
+        decimales de cotizacion el redondeo de amount no se pierde).
+        Vacio si el grupo no opera en moneda extranjera. """
+        self.ensure_one()
+        currency = self.lines_same_currency_id
+        if (not company_amount or not self.lines_rate or not currency
+                or currency == self.company_id.currency_id):
+            return {}
+        amount = currency.round(company_amount / self.lines_rate)
+        if currency.is_zero(amount):
+            return {}
+        return {
+            'currency_id': currency.id,
+            'amount': amount,
+            'exchange_rate': company_amount / amount,
+        }
+
+    def _payments_with_fixed_company_amount(self):
+        self.ensure_one()
+        return self.payment_ids.filtered(
+            lambda p: p.state == 'draft' and p._get_fixed_company_amount()
             and p.currency_id == self.lines_same_currency_id)
+
+    def _reprice_fixed_company_amount_payments(self):
+        """ Con otra cotizacion en el encabezado cambia el importe en la
+        moneda del grupo, nunca el importe en pesos del cheque. """
+        for rec in self:
+            for payment in rec._payments_with_fixed_company_amount():
+                vals = rec._get_payment_vals_for_company_amount(
+                    payment._get_fixed_company_amount())
+                if vals:
+                    payment.update(vals)
 
     @api.onchange('lines_rate')
     def _onchange_lines_rate_propose_to_payments(self):
@@ -49,6 +88,7 @@ class AccountPaymentGroup(models.Model):
         for rec in self:
             for payment in rec._payments_to_rate():
                 payment.exchange_rate = rec.lines_rate
+        self._reprice_fixed_company_amount_payments()
 
     def write(self, vals):
         """ La propagacion NO puede vivir solo en el onchange: lo que el
@@ -64,6 +104,7 @@ class AccountPaymentGroup(models.Model):
                     lambda p: p.exchange_rate != rec.lines_rate)
                 if payments:
                     payments.write({'exchange_rate': rec.lines_rate})
+            self._reprice_fixed_company_amount_payments()
         return res
 
     @api.onchange('lines_same_currency_id')
