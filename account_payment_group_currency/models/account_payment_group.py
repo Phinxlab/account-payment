@@ -119,11 +119,29 @@ class AccountPaymentGroup(models.Model):
         tracking=True,
     )   
 
-    @api.depends('payment_ids.amount_total_signed')
+    @api.depends('payment_ids.amount', 'payment_ids.amount_total_signed',
+                 'payment_ids.currency_id',
+                 'payment_ids.amount_company_currency',
+                 'lines_rate', 'lines_same_currency_id')
     def _compute_payments_amount_currency(self):
+        """ Total de pagos expresado en la moneda del encabezado.
+
+        Las lineas en esa moneda suman su amount. Las que estan en otra moneda
+        (un cheque de terceros en pesos en un grupo en USD) pasan por la moneda
+        de compania: amount_company_currency / lines_rate. Asi sirve para
+        cualquier par de monedas y, en una linea publicada,
+        amount_company_currency es el importe real del asiento. """
         for rec in self:
-            rec.payments_amount_currency = sum((rec._origin.payment_ids + rec.payment_ids.filtered(lambda x: not x.ids)).mapped(
-                'amount'))
+            # this hac is to make it work when creating payment groups with payments without saving + saved records
+            payments = rec._origin.payment_ids + rec.payment_ids.filtered(lambda x: not x.ids)
+            group_currency = rec.lines_same_currency_id
+            total = 0.0
+            for payment in payments:
+                if not group_currency or payment.currency_id == group_currency:
+                    total += payment.amount
+                elif rec.lines_rate:
+                    total += payment.amount_company_currency / rec.lines_rate
+            rec.payments_amount_currency = total
 
     to_pay_amount_currency = fields.Monetary(
         compute='_compute_to_pay_amount_currency',
