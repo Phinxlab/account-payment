@@ -54,16 +54,22 @@ class AccountPayment(models.Model):
     def onchange_payment_group_id(self):
         """ Si el grupo opera en moneda extranjera, la linea SIEMPRE se expresa
         en esa moneda y toma el saldo pendiente en esa moneda. La cotizacion se
-        propone una vez y el importe en moneda de compania se DERIVA. """
-        res = super().onchange_payment_group_id()
+        propone una vez y el importe en moneda de compania se DERIVA.
+
+        El saldo en moneda extranjera se lee ANTES del super(): el base le
+        pone a esta linea el saldo en pesos y, como el grupo cuenta a la
+        linea nueva entre sus pagos, payments_amount_currency se recalcularia
+        incluyendola. """
         group = self.payment_group_id
+        difference_currency = group.payment_difference_currency if group else 0.0
+        res = super().onchange_payment_group_id()
         if not group:
             return res
         group_currency = group.lines_same_currency_id
         if not group_currency or group_currency == group.company_id.currency_id:
             return res
         self.currency_id = group_currency
-        self.amount = group.payment_difference_currency
+        self.amount = difference_currency
         # La cotizacion se pide siempre por el hook: la linea ya quedo en la
         # moneda del encabezado, asi que el devuelve lines_rate cuando aplica.
         self.exchange_rate = self._get_payment_exchange_rate()
