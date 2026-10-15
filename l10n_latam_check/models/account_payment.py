@@ -127,13 +127,19 @@ class AccountPayment(models.Model):
         if recs:
             raise UserError(_("You can't use New Third Checks on a transfer"))
 
+    def _get_check_comparable_amount(self):
+        """ Importe del pago expresado en la moneda del cheque. """
+        self.ensure_one()
+        return self.amount
+
     def action_post(self):
         # third checks validations
         for rec in self:
-            if rec.l10n_latam_check_id and not rec.currency_id.is_zero(rec.l10n_latam_check_id.amount - rec.amount):
+            check = rec.l10n_latam_check_id
+            if check and not check.currency_id.is_zero(check.amount - rec._get_check_comparable_amount()):
                 raise UserError(_(
                     'The amount of the payment (%s) does not match the amount of the selected check (%s).\n'
-                    'Please try to deselect and select check again.') % (rec.amount, rec.l10n_latam_check_id.amount))
+                    'Please try to deselect and select check again.') % (rec.amount, check.amount))
             elif rec.payment_method_line_id.code in ['in_third_checks', 'out_third_checks']:
                 if rec.l10n_latam_check_id.state != 'posted':
                     raise ValidationError(_('Selected check "%s" is not posted') % rec.l10n_latam_check_id.display_name)
