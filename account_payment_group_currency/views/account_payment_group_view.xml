@@ -8,6 +8,8 @@
     <field name="arch" type="xml">
         <field name="payment_difference" position="after">
             <field name="lines_same_currency_id"/>
+            <!-- moneda con la que se muestra lines_rate -->
+            <field name="company_currency_id" invisible="1"/>
             <field name="lines_rate"
                    attrs="{'invisible':[('state', 'not in', ['posted']),('lines_same_currency_id', '=', False)]}"/>
         </field>

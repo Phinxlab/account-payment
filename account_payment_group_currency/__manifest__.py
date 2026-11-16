@@ -1,6 +1,6 @@
 {
     "name": "Account Payment with Multiple methods and MultiCurrency",
-    "version": "15.0.1.2.0",
+    "version": "15.0.1.3.0",
     "category": "Accounting",
     # "website": "",
     "author": "AXCELERE",

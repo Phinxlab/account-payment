@@ -244,10 +244,11 @@ class TestPaymentFX(TransactionCase):
         self.assertAlmostEqual(payment.amount_company_currency, esperado, 2)
         self.assertAlmostEqual(self._liquidity_balance(payment), esperado, 2)
 
-    def test_agregar_factura_no_recotiza_el_grupo(self):
-        """ El onchange solo propone cotización cuando todavía no hay una: si el
-        grupo ya tiene una cotización pactada, agregar o quitar una factura no la
-        pisa con la del día. """
+    def test_cambiar_moneda_del_pago_repropone_la_cotizacion(self):
+        """ Al cambiar la moneda del pago se propone la cotización del día de esa
+        moneda, aunque hubiera una cargada: era de la moneda anterior. Agregar o
+        quitar una factura de la misma moneda no la pisa porque Odoo sólo corre
+        el onchange cuando lines_same_currency_id cambia de valor. """
         if not self._has_group_currency_module():
             self.skipTest('account_payment_group_currency no está instalado')
         Group = self.env['account.payment.group']
@@ -258,9 +259,9 @@ class TestPaymentFX(TransactionCase):
             'payment_date': self.payment_date,
             'lines_same_currency_id': self.foreign_currency.id,
         }
-        pactada = Group.new(dict(base_vals, lines_rate=1520.0))
-        pactada.onchange_lines_same_currency_id()
-        self.assertAlmostEqual(pactada.lines_rate, 1520.0, 6)
+        cargada = Group.new(dict(base_vals, lines_rate=1520.0))
+        cargada.onchange_lines_same_currency_id()
+        self.assertAlmostEqual(cargada.lines_rate, self.rate_value, 4)
 
         vacia = Group.new(dict(base_vals, lines_rate=0.0))
         vacia.onchange_lines_same_currency_id()

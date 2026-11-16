@@ -17,10 +17,25 @@ class AccountPaymentGroup(models.Model):
         store=True
     )
 
+    # La cotizacion se expresa siempre en moneda de la compania: unidades de
+    # company_id.currency_id por 1 unidad de lines_same_currency_id (ARS por 1
+    # CNY, USD por 1 CNY en las companias de USA). NO puede colgar de
+    # currency_id: ese campo queda con la compania activa al crear el grupo y
+    # no se sincroniza con company_id, asi que una Pre-OP de una compania en
+    # ARS podia mostrar "USD" en la cotizacion. Ademas un Monetary se redondea
+    # con su moneda al guardarse: con currency_id en ARS, un USD por CNY de una
+    # compania de USA (0,138912) se grababa como 0,14.
+    company_currency_id = fields.Many2one(
+        related='company_id.currency_id',
+        string='Company Currency',
+    )
+
     lines_rate = fields.Monetary(
         string="Currency rate",
+        currency_field='company_currency_id',
         tracking=True,
-        help="Change rate to use"
+        help="Units of the company currency per 1 unit of the payment "
+             "currency."
     )
 
     def _inverse_lines_same_currency_id(self):
@@ -68,9 +83,15 @@ class AccountPaymentGroup(models.Model):
 
     @api.onchange('lines_same_currency_id')
     def onchange_lines_same_currency_id(self):
-        """ SOLO propone cuando todavia no hay cotizacion cargada, para no pisar
-        una cotizacion pactada al agregar o quitar una factura del grupo. """
-        if self.lines_same_currency_id and not self.lines_rate:
+        """ Al cambiar la moneda del pago propone la cotizacion de Odoo de esa
+        moneda a la fecha de pago, en moneda de la compania. El usuario la puede
+        pisar despues con la cotizacion pactada con el banco.
+
+        Propone aunque ya haya una cotizacion cargada: era de la moneda
+        anterior. Agregar o quitar una factura de la MISMA moneda no la pisa,
+        porque Odoo solo corre este onchange cuando lines_same_currency_id
+        cambia de valor. """
+        if self.lines_same_currency_id:
             self.lines_rate = self.env['res.currency']._get_conversion_rate(
                 self.lines_same_currency_id, self.company_id.currency_id,
                 self.company_id, self.payment_date or fields.Date.today())
