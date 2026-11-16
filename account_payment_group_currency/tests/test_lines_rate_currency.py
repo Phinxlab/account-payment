@@ -164,3 +164,23 @@ class TestLinesRateCurrency(TransactionCase):
             "WHERE id = %s", (group.id,))
         group.invalidate_cache(['lines_rate'])
         self.assertAlmostEqual(group.lines_rate, 1545.5123, 6)
+
+    def test_create_redondea_igual_que_write(self):
+        """ company_currency_id no viaja en los vals del create: sin el
+        override, Odoo grababa la cotizacion sin redondear al crear y
+        redondeada al editar. """
+        group = self.env['account.payment.group'].with_company(
+            self.company_ars).create({
+                'company_id': self.company_ars.id,
+                'currency_id': self.usd.id,
+                'partner_type': 'supplier',
+                'partner_id': self.partner.id,
+                'payment_date': self.date,
+                'lines_same_currency_id': self.fxc.id,
+                'lines_rate': 205.3456,
+            })
+        group.invalidate_cache(['lines_rate'])
+        self.assertAlmostEqual(group.lines_rate, 205.35, 6)
+        group.lines_rate = 205.3456
+        group.invalidate_cache(['lines_rate'])
+        self.assertAlmostEqual(group.lines_rate, 205.35, 6)

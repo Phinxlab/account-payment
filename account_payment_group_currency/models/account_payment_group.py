@@ -41,6 +41,22 @@ class AccountPaymentGroup(models.Model):
     def _inverse_lines_same_currency_id(self):
         return True
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        """ En create Odoo redondea un Monetary con la moneda que venga en los
+        vals, y company_currency_id (related, no guardado) nunca viene: sin
+        esto la cotizacion se grabaria sin redondear al crear y redondeada al
+        editar, y el grupo quedaria con una cotizacion distinta de la que
+        el onchange propago a las lineas. """
+        for vals in vals_list:
+            if vals.get('lines_rate'):
+                company = self.env['res.company'].browse(
+                    vals.get('company_id')) if vals.get('company_id') \
+                    else self.env.company
+                vals['lines_rate'] = company.currency_id.round(
+                    vals['lines_rate'])
+        return super().create(vals_list)
+
     def _payments_to_rate(self):
         """ Lineas a las que les corresponde la cotizacion del encabezado: en
         borrador y en la moneda del encabezado.
@@ -95,7 +111,7 @@ class AccountPaymentGroup(models.Model):
             self.lines_rate = self.env['res.currency']._get_conversion_rate(
                 self.lines_same_currency_id, self.company_id.currency_id,
                 self.company_id, self.payment_date or fields.Date.today())
-        elif not self.lines_same_currency_id:
+        else:
             self.lines_rate = 0.0
 
     @api.depends('to_pay_amount', 'payments_amount',
