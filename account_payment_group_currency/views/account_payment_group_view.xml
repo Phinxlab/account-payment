@@ -37,14 +37,7 @@
                     name="to_pay_amount_currency" 
                     options="{'currency_field': 'lines_same_currency_id', 'digits': 'Product Price', 'field_digits_force': True}" 
                     attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])]}"/>
-                <label for="lines_rate" 
-                    string="T.C." 
-                    class="oe_inline"
-                    attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])]}"
-                />
-                <field name="lines_rate" 
-                    attrs="{'invisible': ['|',('lines_same_currency_id','=', False),('state','not in', ['draft','confirmed'])], 'readonly': [('state', 'not in', ['draft','confirmed'])]}"/>
-            </div> 
+            </div>
                 <!-- Moneda Compañia -->
             <field 
                 name="to_pay_amount" 

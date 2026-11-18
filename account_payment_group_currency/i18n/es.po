@@ -17,8 +17,10 @@ msgstr ""
 
 #. module: account_payment_group_currency
 #: model:ir.model.fields,help:account_payment_group_currency.field_account_payment_group__lines_rate
-msgid "Change rate to use"
-msgstr "Tasa de cambio a usar"
+msgid ""
+"Units of the company currency per 1 unit of the payment currency."
+msgstr ""
+"Unidades de la moneda de la compañía por 1 unidad de la moneda del pago."
 
 #. module: account_payment_group_currency
 #: model:ir.model.fields,field_description:account_payment_group_currency.field_account_payment_group__lines_same_currency_id
